@@ -1,4 +1,8 @@
-import express, { type Application } from "express";
+import express, {
+  type Application,
+  type Request,
+  type Response,
+} from "express";
 import multer from "multer";
 import cors from "cors";
 import {
@@ -6,9 +10,11 @@ import {
   chunkData,
   createEmbeddings,
   loadPDF,
+  queryDB,
 } from "./controller/indexing.js";
 import "dotenv/config";
 import path from "node:path";
+import { ChatOpenAI } from "@langchain/openai";
 const app: Application = express();
 
 app.use(express.json());
@@ -16,6 +22,7 @@ app.use(cors());
 
 const upload = multer({ dest: "uploads/" });
 app.post("/upload", upload.single("file"), async (req, res) => {
+  // Create File Path
   const filePath = path.join(
     import.meta.dirname + "/../uploads/" + req.file?.filename,
   );
@@ -38,15 +45,56 @@ app.post("/upload", upload.single("file"), async (req, res) => {
   }
 
   // Store to Pinecone DB
-  const store = await addToDB(embeddings, chunks);
-  console.log(store);
+  await addToDB(embeddings, chunks);
 
   res.json({
     message: "File uploaded successfully",
-    docs,
-    chunks,
-    embeddings,
   });
+});
+
+app.post("/chat", async (req: Request, res: Response) => {
+  const { question } = req.body;
+
+  try {
+    const queryResult = await queryDB(question);
+
+    // Extract text from metadata
+    const context = queryResult?.matches
+      ?.map((m) => m.metadata?.text)
+      .filter(Boolean)
+      .join("\n\n");
+
+    if (!context) {
+      return res.status(200).json({
+        success: true,
+        answer:
+          "I couldn't find any relevant information in the uploaded documents to answer your question.",
+      });
+    }
+
+    // LLM Call
+    const model = new ChatOpenAI({ model: "gpt-4o-mini" });
+    const response = await model.invoke([
+      {
+        role: "system",
+        content: `You are a helpful assistant. Use the following context to answer the user's question accurately. 
+        Context:
+        ${context}`,
+      },
+      {
+        role: "user",
+        content: question,
+      },
+    ]);
+
+    res.status(200).json({
+      success: true,
+      data: response.content,
+    });
+  } catch (error) {
+    console.log(error);
+    res.status(500).json({ error: "Failed to process question" });
+  }
 });
 
 app.listen(process.env.PORT, () => {

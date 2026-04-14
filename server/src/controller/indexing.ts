@@ -57,7 +57,8 @@ export const addToDB = async (embeddings: number[][], chunks: string[]) => {
       id: `vec_${i}_${Date.now()}`,
       values: embedding,
       metadata: {
-        text: chunks[i],
+        text: chunks[i]!,
+        document: "Doc A", // Has to be dynamic
       },
     }));
 
@@ -69,6 +70,31 @@ export const addToDB = async (embeddings: number[][], chunks: string[]) => {
     return { success: true };
   } catch (error) {
     console.error("Error adding to DB:", error);
+    throw error;
+  }
+};
+
+export const queryDB = async (question: string) => {
+  try {
+    const embedding = await createEmbeddings([question]);
+    if (!embedding || embedding.length === 0) {
+      throw new Error("Failed to generate embedding for the question");
+    }
+
+    const pc = new Pinecone({ apiKey: process.env.PINECONE_API_KEY! });
+    const index = pc.Index(process.env.PINECONE_INDEX_NAME!);
+
+    const queryResult = await index.query({
+      vector: embedding[0]!,
+      topK: 5, // Increased topK for better context
+      includeMetadata: true,
+      filter: {
+        document: "Doc A",
+      },
+    });
+    return queryResult;
+  } catch (error) {
+    console.error("Query DB Error:", error);
     throw error;
   }
 };
