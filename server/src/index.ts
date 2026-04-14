@@ -45,9 +45,14 @@ app.post("/upload", upload.single("file"), async (req, res) => {
   }
 
   // Store to Pinecone DB
-  await addToDB(embeddings, chunks);
-
+  const result = await addToDB(embeddings, chunks);
+  if (!result) {
+    return res
+      .status(400)
+      .json({ error: "Failed to store data to Pinecone DB" });
+  }
   res.json({
+    success: true,
     message: "File uploaded successfully",
   });
 });

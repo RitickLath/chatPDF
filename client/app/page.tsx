@@ -4,9 +4,11 @@ import { Button } from "@/components/ui/button";
 import { Field, FieldDescription, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 
 const Home = () => {
   const [file, setFile] = useState<File | null>(null);
+  const router = useRouter();
 
   const handleSubmit = async () => {
     if (!file) return;
@@ -24,6 +26,9 @@ const Home = () => {
           },
         },
       );
+      if (response.data.success) {
+        router.push("/chat");
+      }
     } catch (error) {
       console.log(error);
     }
